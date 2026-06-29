@@ -18,6 +18,10 @@ app.use((req, res, next) => {
     console.log(`🔔 [SERVER] Received ${req.method} request to ${req.path} from ${req.headers.origin || 'unknown'}`);
     next();
 });
+app.use((req, res, next) => {
+    delete req.headers['expect'];
+    next();
+});
 
 // ── FORCE CORS TO WORK ──────────────────────────────────────────
 app.use(cors({ origin: '*' }));
