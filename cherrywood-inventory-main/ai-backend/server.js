@@ -10,7 +10,6 @@ const app = express();
 
 // ── FORCE CORS TO WORK ──────────────────────────────────────────
 app.use(cors({ origin: '*' }));
-app.options('*', cors()); // Explicitly handle browser preflight requests
 
 app.use(express.json());
 
