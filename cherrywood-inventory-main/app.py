@@ -9,6 +9,8 @@ from parts_agent import parts_agent
 from flask_wtf.csrf import CSRFProtect
 from flask import send_from_directory
 from forms import PartForm
+from openai import OpenAI
+from flask import jsonify
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
