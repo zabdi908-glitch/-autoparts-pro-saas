@@ -11,6 +11,7 @@ from forms import PartForm
 from openai import OpenAI
 import httpx
 from flask import jsonify
+import requests
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
@@ -747,7 +748,7 @@ def proxy_chat():
             ])
             inventory_context = f"Current available parts (up to 100 shown):\n{parts_list}" if parts_list else "No parts currently in stock."
         except Exception as e:
-            print(f"❌ [AI] DB error in AI: {e}", flush=True)
+            print(f"❌ [AI] DB error: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
         system_prompt = f"""You are a helpful auto parts assistant for Cherrywood Auto Parts, a VAG vehicle breaker based in Birmingham, UK.
@@ -759,24 +760,29 @@ Guidelines:
 - If a part isn't listed, say we may still have it in the yard.
 - Encourage WhatsApp contact: https://wa.me/447440369576"""
 
-        print("🔔 [AI] Calling OpenAI...", flush=True)
-        
-        # ======= FIX STARTS HERE =======
-        import httpx
-        http_client = httpx.Client(proxies={})
-        client = OpenAI(api_key=api_key, http_client=http_client)
-        # ======= FIX ENDS HERE =======
+        print("🔔 [AI] Calling OpenAI via Requests...", flush=True)
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            max_tokens=400,
-            messages=[
+        # FIX: Use raw Requests instead of the OpenAI SDK to avoid proxy errors
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
-            ]
-        )
+            ],
+            "max_tokens": 400
+        }
 
-        reply = response.choices[0].message.content
+        response = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+        
+        if response.status_code != 200:
+            print(f"❌ [AI] OpenAI API Error: {response.text}", flush=True)
+            return jsonify({'error': f"OpenAI API Error: {response.text}"}), response.status_code
+
+        reply = response.json()['choices'][0]['message']['content']
         print("🔔 [AI] Success! Reply sent.", flush=True)
         return jsonify({'reply': reply})
 
