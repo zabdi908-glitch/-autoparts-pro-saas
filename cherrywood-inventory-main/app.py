@@ -710,15 +710,22 @@ def parts_bulk_update():
 
 import requests  # Make sure this is at the very top of app.py with your other imports!
 
+import requests  # Ensure this is at the very top of the file
+
 @app.route('/api/proxy-chat', methods=['POST'])
 def proxy_chat():
-    # The Node server URL where your AI is running
+    # The URL of your AI Node server
     node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
     try:
-        # Forward the chat request to Node
-        response = requests.post(node_url, json=request.get_json())
-        return response.json(), response.status_code
+        # Forward the request to Node, but strip the "Expect" header to prevent 417 errors
+        headers = {'Expect': ''}
+        response = requests.post(node_url, json=request.get_json(), headers=headers)
+        
+        # Return the exact response from the Node server
+        return response.text, response.status_code, {'Content-Type': 'application/json'}
     except Exception as e:
+        # Log the error to Render's logs so we can see it
+        app.logger.error(f"Proxy error: {e}")
         return {"error": str(e)}, 500
 # ============================================
 # RUN THE APP
