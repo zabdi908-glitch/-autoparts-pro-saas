@@ -13,6 +13,13 @@ app.use(cors()); // Allow all websites to talk to this AI server
 
 app.use(express.json());
 
+// ── FORCE STRIP "Expect" HEADER TO KILL THE 417 ERROR ──────────
+app.use((req, res, next) => {
+    delete req.headers['expect'];
+    delete req.headers['Expect'];
+    next();
+});
+
 // ── GLOBAL REQUEST LOGGER (The Smoke Detector) ──────────────
 app.use((req, res, next) => {
     console.log(`🔔 [SERVER] Received ${req.method} request to ${req.path} from ${req.headers.origin || 'unknown'}`);
