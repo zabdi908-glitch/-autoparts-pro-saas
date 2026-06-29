@@ -713,21 +713,6 @@ import requests  # Make sure this is at the very top of app.py with your other i
 
 import requests  # Ensure this is at the very top of the file
 
-@app.route('/api/proxy-chat', methods=['POST'])
-def proxy_chat():
-    # The URL of your AI Node server
-    node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
-    try:
-        # Forward the request to Node, but strip the "Expect" header to prevent 417 errors
-        headers = {'Expect': ''}
-        response = requests.post(node_url, json=request.get_json(), headers=headers)
-        
-        # Return the exact response from the Node server
-        return response.text, response.status_code, {'Content-Type': 'application/json'}
-    except Exception as e:
-        # Log the error to Render's logs so we can see it
-        app.logger.error(f"Proxy error: {e}")
-        return {"error": str(e)}, 500
 
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
