@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Warranty Policy - Cherrywood Auto Parts{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12 w-full">
+    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-8">
+        <h1 class="text-3xl font-black text-white mb-2 flex items-center gap-3">
+            <i class="fa-solid fa-shield-halved text-[#f97316]"></i> Warranty Policy
+        </h1>
+        <p class="text-slate-400 text-sm mb-8">Last updated: June 2026</p>
+
+        <div class="space-y-6 text-slate-300 text-sm leading-relaxed">
+            <section>
+                <h2 class="text-xl font-black text-white mb-3">1. Our Warranty Promise</h2>
+                <p>All used parts come with a <span class="text-[#f97316] font-bold">90-day warranty</span> covering mechanical failure.</p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-black text-white mb-3">2. What's Covered</h2>
+                <ul class="list-disc pl-6 space-y-2">
+                    <li><span class="text-white font-bold">Engine Components</span> - Complete engines, cylinder heads, and internal components</li>
+                    <li><span class="text-white font-bold">Transmission & Drivetrain</span> - Gearboxes, differentials, and drive shafts</li>
+                    <li><span class="text-white font-bold">Electrical Parts</span> - ECUs, alternators, starters, and sensors</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-black text-white mb-3">3. What's Not Covered</h2>
+                <ul class="list-disc pl-6 space-y-2">
+                    <li>Wear & Tear - Brake pads, clutch plates, consumable items</li>
+                    <li>Misuse - Damage caused by improper installation</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-black text-white mb-3">4. How to Claim</h2>
+                <ol class="list-decimal pl-6 space-y-2">
+                    <li>Contact us via WhatsApp or email within 90 days</li>
+                    <li>Provide proof - Order details and photos</li>
+                    <li>Return the part - We'll arrange collection</li>
+                    <li>We'll resolve - Replacement or refund</li>
+                </ol>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-black text-white mb-3">5. Contact Us</h2>
+                <div class="flex flex-wrap gap-3">
+                    <a href="https://wa.me/447440369576" class="bg-[#22c55e] text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-600 transition">
+                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                    </a>
+                    <a href="tel:07440369576" class="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-600 transition">
+                        <i class="fa-solid fa-phone"></i> Call Us
+                    </a>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}

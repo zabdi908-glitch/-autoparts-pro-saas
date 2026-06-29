@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block meta_description %}
+<meta name="description" content="Browse our full inventory of used Audi, VW, SEAT and Škoda car parts. Search by make, model, or part number. Nationwide delivery available.">
+{% endblock %}
+{% block title %}Parts - Cherrywood Auto Parts{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8 w-full">
+    <!-- Hero -->
+    <section class="orange-gradient text-black py-8 rounded-2xl mb-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <h1 class="text-2xl md:text-3xl font-black uppercase">Search Our Parts Inventory</h1>
+            <p class="text-sm font-bold opacity-90">Find the VAG part you need — search by part number, model, or category</p>
+        </div>
+    </section>
+
+    <!-- ===== SEARCH & FILTERS ===== -->
+    <div class="mb-6">
+        <!-- Search Bar -->
+        <form action="/parts-public" method="GET" class="flex flex-col md:flex-row gap-3">
+            <div class="flex-1">
+                <input type="text" name="q" 
+                       placeholder="🔍 Search part number, model, engine code..." 
+                       class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-[#f97316] outline-none transition"
+                       value="{{ search_query or '' }}">
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="px-6 py-3 bg-[#f97316] text-black font-black rounded-lg hover:bg-orange-500 transition">
+                    Search
+                </button>
+                {% if search_query %}
+                    <a href="/parts-public" class="px-4 py-3 bg-slate-700 text-white font-black rounded-lg hover:bg-slate-600 transition">
+                        Clear
+                    </a>
+                {% endif %}
+            </div>
+        </form>
+{% if page > 1 %}
+    <meta name="robots" content="noindex, follow">
+    <link rel="canonical" href="https://cherrywoodautoparts.co.uk/parts-public">
+{% endif %}
+        
+        <!-- Category Filters -->
+        <div class="flex flex-wrap gap-3 mt-4">
+            <div class="flex flex-wrap gap-2">
+                <a href="/parts-public" class="px-4 py-2 rounded-full text-sm font-bold bg-[#f97316] text-black hover:bg-orange-500 transition">
+                    All Parts
+                </a>
+                {% for cat in ['Engine', 'Gearbox', 'Electronics', 'Body Panel', 'Interior', 'Wheels', 'Lighting', 'Suspension', 'Brakes', 'Exhaust'] %}
+                    <a href="/parts-public?category={{ cat }}" class="px-4 py-2 rounded-full text-sm font-bold bg-slate-800 text-slate-300 hover:bg-[#f97316] hover:text-black transition">
+                        {{ cat }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Price, Status, Sort Filters as a single form -->
+        <form id="filter-form" action="/parts-public" method="GET" class="flex flex-wrap gap-3 mt-3">
+            <!-- Price Filter -->
+            <div class="flex items-center gap-2 bg-[#0f172a] border border-slate-700 rounded-lg px-3 py-2">
+                <span class="text-xs text-slate-400 font-bold">Price:</span>
+                <select name="price" class="bg-[#0f172a] text-white text-sm rounded px-2 py-1 focus:outline-none" onchange="document.getElementById('filter-form').submit()">
+                    <option value="">All</option>
+                    <option value="0-100">Under £100</option>
+                    <option value="100-500">£100 - £500</option>
+                    <option value="500-1000">£500 - £1000</option>
+                    <option value="1000-99999">Over £1000</option>
+                </select>
+            </div>
+
+            <!-- Stock Status Filter -->
+            <div class="flex items-center gap-2 bg-[#0f172a] border border-slate-700 rounded-lg px-3 py-2">
+                <span class="text-xs text-slate-400 font-bold">Status:</span>
+                <select name="status" class="bg-[#0f172a] text-white text-sm rounded px-2 py-1 focus:outline-none" onchange="document.getElementById('filter-form').submit()">
+                    <option value="">All</option>
+                    <option value="Available">Available</option>
+                    <option value="Reserved">Reserved</option>
+                    <option value="Sold">Sold</option>
+                </select>
+            </div>
+
+            <!-- Sort Filter -->
+            <div class="flex items-center gap-2 bg-[#0f172a] border border-slate-700 rounded-lg px-3 py-2">
+                <span class="text-xs text-slate-400 font-bold">Sort:</span>
+                <select name="sort" class="bg-[#0f172a] text-white text-sm rounded px-2 py-1 focus:outline-none" onchange="document.getElementById('filter-form').submit()">
+                    <option value="newest">Newest First</option>
+                    <option value="price_asc">Price: Low → High</option>
+                    <option value="price_desc">Price: High → Low</option>
+                    <option value="name">Name A → Z</option>
+                </select>
+            </div>
+        </form>
+    </div>
+
+    <!-- ===== PARTS GRID ===== -->
+    {% if not parts %}
+        <div class="text-center py-12 bg-[#111827] rounded-2xl border border-slate-800">
+            <i class="fa-solid fa-cubes text-4xl text-slate-600 mb-4 block"></i>
+            <p class="text-slate-400">No parts found. Check back soon!</p>
+        </div>
+    {% else %}
+        <div class="parts-grid">
+            {% for part in parts %}
+            <div class="bg-[#111827] border border-slate-800 rounded-2xl overflow-hidden hover:border-[#f97316] transition">
+                <div class="h-48 bg-slate-900 relative">
+                    <img src="{{ part.photo_url or 'https://via.placeholder.com/400x300/1a1a2e/ffffff?text=Part+Image' }}" 
+                         alt="{{ part.part_name }}" 
+                         class="w-full h-full object-cover">
+                    <span class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold 
+                        {% if part.stock_status == 'Available' %}bg-green-600 text-white{% endif %}
+                        {% if part.stock_status == 'Reserved' %}bg-yellow-600 text-black{% endif %}
+                        {% if part.stock_status == 'Sold' %}bg-red-600 text-white{% endif %}">
+                        {{ part.stock_status }}
+                    </span>
+                </div>
+                <div class="p-4">
+                    <h3 class="text-lg font-black text-white mb-1">{{ part.part_name }}</h3>
+                    <p class="text-xs text-slate-400">OEM: {{ part.oem_number or 'N/A' }}</p>
+                    <p class="text-xs text-slate-400">{{ part.make }} {{ part.model }} {{ part.generation or '' }}</p>
+                    <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-800">
+                        <span class="text-xl font-black text-[#f97316]">£{{ "%.2f"|format(part.price) }}</span>
+                        <span class="text-xs bg-slate-800 px-2 py-1 rounded">{{ part.category }}</span>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <a href="/part/{{ part.slug or part.id }}" class="flex-1 bg-[#f97316] text-black text-center py-2 rounded-lg text-xs font-bold uppercase hover:bg-orange-500 transition">
+                            View Part
+                        </a>
+                        <a href="https://wa.me/447440369576?text={{ 'Hi%2C%20I%27m%20interested%20in%20part%20' }}{{ part.id }}" target="_blank" class="flex-1 bg-green-600 text-white text-center py-2 rounded-lg text-xs font-bold uppercase hover:bg-green-700 transition flex items-center justify-center gap-1">
+                            <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ===== PAGINATION (NOW KEEPS FILTERS) ===== -->
+        {% if pages > 1 %}
+        <div class="flex justify-center gap-2 mt-8 flex-wrap">
+            {% if page > 1 %}
+                <a href="/parts-public?page={{ page - 1 }}{% for key, val in filter_args.items() %}&{{ key }}={{ val }}{% endfor %}" class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-600 transition">Previous</a>
+            {% endif %}
+            {% for p in range(1, pages + 1) %}
+                {% if p == page %}
+                    <span class="px-4 py-2 bg-[#f97316] text-black rounded font-bold">{{ p }}</span>
+                {% else %}
+                    <a href="/parts-public?page={{ p }}{% for key, val in filter_args.items() %}&{{ key }}={{ val }}{% endfor %}" class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-600 transition">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if page < pages %}
+                <a href="/parts-public?page={{ page + 1 }}{% for key, val in filter_args.items() %}&{{ key }}={{ val }}{% endfor %}" class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-600 transition">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

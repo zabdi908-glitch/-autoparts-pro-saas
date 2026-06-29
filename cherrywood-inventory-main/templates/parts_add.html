@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Add Part - Cherrywood Auto Parts{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-12 w-full">
+    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-8">
+        <h1 class="text-3xl font-black text-white mb-2 flex items-center gap-3">
+            <i class="fa-solid fa-plus-circle text-[#f97316]"></i> Add New Part
+        </h1>
+        <p class="text-slate-400 text-sm mb-6">Fill in the details below to add a new part to inventory.</p>
+
+        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+            {{ form.csrf_token }}
+            
+            <!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="mb-4 p-3 rounded-lg text-sm font-bold {% if category == 'error' %}bg-red-600/20 text-red-400 border border-red-600/30{% else %}bg-green-600/20 text-green-400 border border-green-600/30{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Stock ID *</label>
+                    {{ form.stock_id(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Part Name *</label>
+                    {{ form.part_name(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Category *</label>
+                    {{ form.category(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Part Type</label>
+                    {{ form.part_type(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Make</label>
+                    {{ form.make(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Model</label>
+                    {{ form.model(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Generation</label>
+                    {{ form.generation(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">OEM / Part Number</label>
+                    {{ form.oem_number(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Engine Code</label>
+                    {{ form.engine_code(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Condition</label>
+                    {{ form.condition(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Price (£)</label>
+                    {{ form.price(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Stock Status</label>
+                    {{ form.stock_status(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-slate-400 mb-1">Location</label>
+                    {{ form.location(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none") }}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-black uppercase text-slate-400 mb-1">Notes</label>
+                {{ form.notes(class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none", rows="2") }}
+            </div>
+
+            <!-- Photo Upload -->
+            <div>
+                <label class="block text-xs font-black uppercase text-slate-400 mb-1">
+                    <i class="fa-solid fa-camera text-[#f97316] mr-1"></i> Upload Photos
+                    <span class="text-slate-500 font-normal lowercase">(optional — JPEG, PNG, WebP)</span>
+                </label>
+                <input type="file" name="photos" multiple accept="image/*"
+                       class="w-full p-3 bg-[#0f172a] border border-slate-700 rounded-lg text-white focus:border-[#f97316] outline-none transition file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#f97316] file:text-black file:font-bold hover:file:bg-orange-500">
+                <p class="text-xs text-slate-500 mt-1">You can upload multiple photos. Max 5MB each.</p>
+            </div>
+
+            <button type="submit" class="w-full p-4 bg-[#f97316] text-black font-black uppercase rounded-xl hover:bg-orange-500 transition">
+                Add Part
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
