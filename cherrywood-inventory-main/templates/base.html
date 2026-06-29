@@ -278,11 +278,6 @@
             const data = await response.json();
             removeTyping();
 
-            if (data.error) {
-                addMessage("ai", "Sorry, I couldn't process that. Please call us directly!");
-            } else {
-                addMessage("ai", data.reply);
-            }
 
         } catch (err) {
             removeTyping();
