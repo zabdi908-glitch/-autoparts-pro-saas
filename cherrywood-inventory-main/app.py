@@ -722,25 +722,28 @@ def proxy_chat():
     node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
     try:
         payload = request.get_json()
-        current_app.logger.info(f"🔔 [PYTHON] Received chat: {payload}")
+        
+        # ⚠️ WATCH THIS LOG! It will guarantee we see the request.
+        print(f"🔔 [PYTHON] Received chat: {payload}", flush=True)
         
         # Forward to Node
         response = requests.post(node_url, json=payload, headers={'Expect': ''}, timeout=15)
-        current_app.logger.info(f"🔔 [PYTHON] Node responded with status: {response.status_code}")
         
-        # If we get a 417, print the exact error Node sent us
+        print(f"🔔 [PYTHON] Node responded with status: {response.status_code}", flush=True)
+        
+        # If we get a 417, force Node's hidden error message into the logs!
         if response.status_code == 417:
             error_body = response.text
-            current_app.logger.error(f"❌ [PYTHON] Node returned 417! It said: {error_body}")
+            print(f"❌ [PYTHON] Node returned 417! It said: {error_body}", flush=True)
             return {"error": f"AI Server Error: {error_body}"}, 417
             
         return response.text, response.status_code, {'Content-Type': 'application/json'}
         
     except requests.exceptions.ConnectionError as e:
-        current_app.logger.error(f"❌ [PYTHON] Cannot reach Node server: {e}")
+        print(f"❌ [PYTHON] Cannot reach Node server: {e}", flush=True)
         return {"error": "AI server is offline"}, 502
     except Exception as e:
-        current_app.logger.error(f"❌ [PYTHON] Proxy error: {e}")
+        print(f"❌ [PYTHON] Proxy error: {e}", flush=True)
         return {"error": str(e)}, 500
 # ============================================
 # RUN THE APP
