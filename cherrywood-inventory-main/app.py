@@ -707,7 +707,19 @@ def parts_bulk_update():
             flash('Please upload a CSV file', 'error')
             return redirect(url_for('parts_bulk_update'))
     return render_template('parts_bulk_update.html')
-    
+
+import requests  # Make sure this is at the very top of app.py with your other imports!
+
+@app.route('/api/proxy-chat', methods=['POST'])
+def proxy_chat():
+    # The Node server URL where your AI is running
+    node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
+    try:
+        # Forward the chat request to Node
+        response = requests.post(node_url, json=request.get_json())
+        return response.json(), response.status_code
+    except Exception as e:
+        return {"error": str(e)}, 500
 # ============================================
 # RUN THE APP
 # ============================================
