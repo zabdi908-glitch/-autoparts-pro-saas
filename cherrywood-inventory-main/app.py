@@ -9,6 +9,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask import send_from_directory
 from forms import PartForm
 from openai import OpenAI
+import httpx
 from flask import jsonify
 
 app = Flask(__name__)
@@ -717,6 +718,7 @@ def parts_bulk_update():
 @csrf.exempt
 def proxy_chat():
     try:
+        print("🔔 [AI] Request received", flush=True)
         data = request.get_json(force=True)
         if not data:
             return jsonify({'error': 'No JSON body received'}), 400
@@ -725,11 +727,14 @@ def proxy_chat():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
+        print(f"🔔 [AI] Message: {user_message}", flush=True)
+
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
+            print("❌ [AI] Missing OPENAI_API_KEY env var", flush=True)
             return jsonify({'error': 'API key not configured'}), 500
 
-        # Pull live inventory to give the AI context
+        print("🔔 [AI] Fetching inventory...", flush=True)
         try:
             db = get_db()
             parts_rows = db.execute(
@@ -742,23 +747,26 @@ def proxy_chat():
             ])
             inventory_context = f"Current available parts (up to 100 shown):\n{parts_list}" if parts_list else "No parts currently in stock."
         except Exception as e:
-            print(f"DB error in AI: {e}", flush=True)
+            print(f"❌ [AI] DB error in AI: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
-        system_prompt = f"""You are the friendly parts assistant for Cherrywood Auto Parts, a VAG vehicle breaker based in Birmingham, UK (Bordesley Green, B9 4UH).
-
-You help customers find used parts for Audi, Volkswagen, SEAT and Škoda vehicles. Always be helpful, concise and honest.
+        system_prompt = f"""You are a helpful auto parts assistant for Cherrywood Auto Parts, a VAG vehicle breaker based in Birmingham, UK.
 
 {inventory_context}
 
 Guidelines:
-- If a part is in stock, mention the price and suggest they click "View Part" or WhatsApp us on 07440 369576.
-- If a part isn't listed, say we may still have it in the yard and recommend they WhatsApp us directly.
-- Keep replies short and friendly (2-4 sentences max).
-- Never make up part numbers or prices not listed above.
-- Always encourage WhatsApp contact for anything not found: https://wa.me/447440369576"""
+- If a part is in stock, mention the price and suggest they WhatsApp us on 07440 369576.
+- If a part isn't listed, say we may still have it in the yard.
+- Encourage WhatsApp contact: https://wa.me/447440369576"""
 
-        client = OpenAI(api_key=api_key)
+        print("🔔 [AI] Calling OpenAI...", flush=True)
+        
+        # ======= FIX STARTS HERE =======
+        import httpx
+        http_client = httpx.Client(proxies={})
+        client = OpenAI(api_key=api_key, http_client=http_client)
+        # ======= FIX ENDS HERE =======
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=400,
@@ -769,10 +777,11 @@ Guidelines:
         )
 
         reply = response.choices[0].message.content
+        print("🔔 [AI] Success! Reply sent.", flush=True)
         return jsonify({'reply': reply})
 
     except Exception as e:
-        print(f"AI Chat Error: {e}", flush=True)
+        print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
         return jsonify({'error': str(e)}), 500
 # ============================================
 # RUN THE APP
