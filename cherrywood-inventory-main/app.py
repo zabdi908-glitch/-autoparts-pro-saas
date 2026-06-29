@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import sqlite3
 import os
 import json
-import requests 
 from functools import wraps
 from datetime import datetime
 from parts_agent import parts_agent
