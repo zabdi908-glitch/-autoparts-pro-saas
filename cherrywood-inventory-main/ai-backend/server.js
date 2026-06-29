@@ -7,7 +7,11 @@ const path = require("path");
 const OpenAI = require("openai");
 
 const app = express();
-app.use(cors());
+
+// ── FORCE CORS TO WORK ──────────────────────────────────────────
+app.use(cors({ origin: '*' }));
+app.options('*', cors()); // Explicitly handle browser preflight requests
+
 app.use(express.json());
 
 // ── OpenAI Setup ──────────────────────────────────────────────
@@ -22,16 +26,20 @@ const sessions = {};
 function getLiveInventory() {
   try {
     const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'inventory.db');
+    console.log(`🗄️ Attempting to open database at: ${dbPath}`); // DEBUG LOG
+    
     const db = new Database(dbPath);
     const sql = "SELECT id, part_name, stock_id, price, stock_status FROM parts WHERE stock_status = 'Available' LIMIT 100";
     const rows = db.prepare(sql).all();
     db.close();
     
+    console.log(`✅ Found ${rows.length} available parts.`); // DEBUG LOG
+    
     return rows.map(p => 
       `[ID:${p.id}] ${p.part_name} | SKU: ${p.stock_id} | Price: £${p.price} | Status: ${p.stock_status}`
     ).join("\n");
   } catch (err) {
-    console.error("DB Error:", err);
+    console.error("❌ DB Error:", err.message);
     return [];
   }
 }
@@ -44,17 +52,16 @@ function buildSystemPrompt() {
 YOUR JOB:
 - Answer questions about parts, pricing, availability, and vehicle compatibility
 - Collect customer details when they want to place a formal enquiry or callback request
-- Be warm, professional, and knowledgeable — like a helpful member of staff
 
 COLLECTING ENQUIRY DETAILS:
-If a customer wants to place an enquiry, order a part, or requests a callback, collect ALL of the following one step at a time:
+If a customer wants to place an enquiry, collect ALL of the following one step at a time:
 1. Full name
 2. Best phone number
 3. Email address
 4. Vehicle make, model, and year
 5. The part they need
 
-Once you have all 5 details, summarise the enquiry back to them and confirm: "Your enquiry has been submitted. A member of our team will be in touch within 2 hours during business hours."
+Once you have all 5 details, summarise the enquiry and confirm: "Your enquiry has been submitted. A member of our team will be in touch within 2 hours."
 
 Then include this exact tag at the end of your message:
 [ENQUIRY_COMPLETE]
@@ -82,43 +89,37 @@ async function sendStaffNotification(sessionId, enquiryDetails) {
     from: process.env.EMAIL_USER,
     to: process.env.STAFF_EMAIL,
     subject: `🔔 New Parts Enquiry — Premium Auto Parts`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px;">
-        <div style="background: #D32F2F; padding: 20px; border-radius: 8px 8px 0 0;">
-          <h2 style="color: white; margin: 0;">New Customer Enquiry</h2>
-        </div>
-        <div style="background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px;">
-          <p><strong>Session ID:</strong> ${sessionId}</p>
-          <p><strong>Time:</strong> ${new Date().toLocaleString("en-GB")}</p>
-          <hr style="border: 1px solid #eee; margin: 16px 0;" />
-          <h3 style="color: #333;">Full Conversation Transcript:</h3>
-          <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #ddd; white-space: pre-wrap; font-size: 14px; line-height: 1.6;">
-${transcript}
-          </div>
-        </div>
-      </div>
-    `,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px;">
+      <h2 style="color: white;">New Customer Enquiry</h2>
+      <pre style="white-space: pre-wrap;">${transcript}</pre>
+    </div>`,
   };
   await transporter.sendMail(mailOptions);
 }
 
 // ── Main chat endpoint ────────────────────────────────────────
 app.post("/api/enquiry", async (req, res) => {
+  console.log("🔔 [NODE] - Enquiry endpoint hit!"); // CRITICAL DEBUG LOG
+
   const { message, sessionId } = req.body;
+  console.log(`📨 Message: "${message}", Session: ${sessionId}`); // DEBUG LOG
+
   if (!message || !sessionId) {
     return res.status(400).json({ error: "message and sessionId are required" });
   }
 
   if (!sessions[sessionId]) {
     sessions[sessionId] = [];
-    console.log(`New session started: ${sessionId}`);
+    console.log(`🆕 New session started: ${sessionId}`);
   }
 
   sessions[sessionId].push({ role: "user", content: message });
 
   try {
+    console.log("🗄️ Building system prompt...");
     const systemPrompt = buildSystemPrompt();
     
+    console.log("🤖 Calling OpenAI API...");
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -128,6 +129,7 @@ app.post("/api/enquiry", async (req, res) => {
       max_tokens: 1000,
     });
 
+    console.log("✅ OpenAI returned a response.");
     let reply = completion.choices[0]?.message?.content || "Sorry, please try again.";
     const enquiryComplete = reply.includes("[ENQUIRY_COMPLETE]");
     reply = reply.replace("[ENQUIRY_COMPLETE]", "").trim();
@@ -135,20 +137,22 @@ app.post("/api/enquiry", async (req, res) => {
     sessions[sessionId].push({ role: "assistant", content: reply });
 
     if (enquiryComplete && process.env.EMAIL_USER && process.env.STAFF_EMAIL) {
+      console.log("📧 Sending email notification...");
       sendStaffNotification(sessionId, reply).catch(err =>
         console.error("Email notification failed:", err)
       );
     }
 
+    console.log("✅ Sending reply back to website.");
     res.json({ reply, enquiryComplete, sessionId });
 
   } catch (error) {
-    console.error("Server error:", error);
-    res.status(500).json({ error: "Server error, please try again" });
+    console.error("❌ SERVER ERROR:", error.message); // This will reveal the specific crash
+    res.status(500).json({ error: `Server error: ${error.message}` });
   }
 });
 
-// ── Get conversation transcript (for staff dashboard) ────────
+// ── Get conversation transcript ───────────────────────────────
 app.get("/api/enquiry/:sessionId", (req, res) => {
   const history = sessions[req.params.sessionId];
   if (!history) return res.status(404).json({ error: "Session not found" });
