@@ -8,6 +8,17 @@ const OpenAI = require("openai");
 
 const app = express();
 
+// ── UNBLOCK THE BRIDGE ────────────────────────────────────────
+app.use(cors()); // Allow all websites to talk to this AI server
+
+app.use(express.json());
+
+// ── GLOBAL REQUEST LOGGER (The Smoke Detector) ──────────────
+app.use((req, res, next) => {
+    console.log(`🔔 [SERVER] Received ${req.method} request to ${req.path} from ${req.headers.origin || 'unknown'}`);
+    next();
+});
+
 // ── FORCE CORS TO WORK ──────────────────────────────────────────
 app.use(cors({ origin: '*' }));
 
