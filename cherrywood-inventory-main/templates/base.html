@@ -222,8 +222,7 @@
 
 <script>
 (function () {
-  const SERVER_URL = "/api/proxy-chat";
-  const sessionId = "chat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+  const SERVER_URL = "/api/proxy-chat"; // Points directly to your Python backend!
   let isOpen = false;
   let isLoading = false;
   let hasOpened = false;
@@ -254,40 +253,68 @@
     return div;
   }
 
-     async function bapSend() {
-        const input = document.getElementById("bap-input");
-        const btn = document.getElementById("bap-send-btn");
-        const message = input.value.trim();
-        if (!message || isLoading) return;
+  function showTyping() {
+    const box = document.getElementById("bap-messages");
+    const div = document.createElement("div");
+    div.className = "bap-msg bap-msg-ai typing";
+    div.id = "bap-typing";
+    div.innerHTML = `<span class="bap-dot-anim">●</span><span class="bap-dot-anim">●</span><span class="bap-dot-anim">●</span>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
 
-        isLoading = true;
-        btn.disabled = true;
-        input.value = "";
+  function removeTyping() {
+    const el = document.getElementById("bap-typing");
+    if (el) el.remove();
+  }
 
-        addMessage("user", message);
-        showTyping();
+  async function bapSend() {
+    const input = document.getElementById("bap-input");
+    const btn = document.getElementById("bap-send-btn");
+    const message = input.value.trim();
+    if (!message || isLoading) return;
 
-        try {
-            // We point to the Python app directly, no Node proxy needed!
-            const response = await fetch("/api/proxy-chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message }), // <-- No sessionId needed
-            });
+    isLoading = true;
+    btn.disabled = true;
+    input.value = "";
 
-            const data = await response.json();
-            removeTyping();
+    addMessage("user", message);
+    showTyping();
 
+    try {
+      console.log("📤 Sending message to backend...");
+      const response = await fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      
+      console.log("📥 Received response status:", response.status);
+      const data = await response.json();
+      removeTyping();
 
-        } catch (err) {
-            removeTyping();
-            addMessage("ai", "Connection issue. Please refresh and try again.");
-        }
-
-        isLoading = false;
-        btn.disabled = false;
-        input.focus();
+      if (data.error) {
+        console.error("⚠️ Backend Error:", data.error);
+        addMessage("ai", "⚠️ Server Error: " + data.error);
+      } else {
+        console.log("✅ AI Reply:", data.reply);
+        addMessage("ai", data.reply);
+      }
+    } catch (err) {
+      removeTyping();
+      console.error("❌ Frontend Catch Error:", err);
+      addMessage("ai", "Connection issue: " + err.message);
     }
+
+    isLoading = false;
+    btn.disabled = false;
+    input.focus();
+  }
+
+  function bapQuick(text) {
+    document.getElementById("bap-input").value = text;
+    bapSend();
+  }
 
   window.bapToggle = bapToggle;
   window.bapSend = bapSend;
