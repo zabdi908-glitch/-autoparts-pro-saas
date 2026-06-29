@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import sqlite3
 import os
 import json
+import requests 
 from functools import wraps
 from datetime import datetime
 from parts_agent import parts_agent
@@ -726,6 +727,30 @@ def proxy_chat():
     except Exception as e:
         # Log the error to Render's logs so we can see it
         app.logger.error(f"Proxy error: {e}")
+        return {"error": str(e)}, 500
+
+# ============================================
+# AI CHAT PROXY ROUTE (Connects Python to Node)
+# ============================================
+@app.route('/api/proxy-chat', methods=['POST'])
+def proxy_chat():
+    # The URL of your AI Node server
+    node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
+    try:
+        payload = request.get_json()
+        print(f"🔔 [PYTHON] Received chat: {payload}")  # Debug log
+        
+        # Forward to Node with the 'Expect' header fix
+        response = requests.post(node_url, json=payload, headers={'Expect': ''}, timeout=15)
+        
+        print(f"🔔 [PYTHON] Node responded with status: {response.status_code}")
+        return response.text, response.status_code, {'Content-Type': 'application/json'}
+        
+    except requests.exceptions.ConnectionError as e:
+        print(f"❌ [PYTHON] Cannot reach Node server: {e}")
+        return {"error": "AI server is offline"}, 502
+    except Exception as e:
+        print(f"❌ [PYTHON] Proxy error: {e}")
         return {"error": str(e)}, 500
 # ============================================
 # RUN THE APP
