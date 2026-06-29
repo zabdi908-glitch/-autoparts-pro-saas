@@ -710,11 +710,6 @@ def parts_bulk_update():
             return redirect(url_for('parts_bulk_update'))
     return render_template('parts_bulk_update.html')
 
-import requests  # Make sure this is at the very top of app.py with your other imports!
-
-import requests  # Ensure this is at the very top of the file
-
-
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
 # ============================================
