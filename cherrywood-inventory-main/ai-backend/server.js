@@ -4,21 +4,25 @@ const cors = require("cors");
 const nodemailer = require("nodemailer");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const OpenAI = require("openai");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── In-memory session store ───────────────────────────────────
+// ── OpenAI Setup ──────────────────────────────────────────────
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // This is your OpenAI key
+});
+
+// ── Session Store ─────────────────────────────────────────────
 const sessions = {};
 
 // ── LIVE DATABASE QUERY ───────────────────────────────────────
 function getLiveInventory() {
   return new Promise((resolve, reject) => {
-    // Uses DATABASE_PATH from env, or defaults to local inventory.db
     const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'inventory.db');
     const db = new sqlite3.Database(dbPath);
-    
     const sql = "SELECT id, part_name, stock_id, price, stock_status FROM parts WHERE stock_status = 'Available' LIMIT 100";
     
     db.all(sql, [], (err, rows) => {
@@ -57,10 +61,6 @@ Once you have all 5 details, summarise the enquiry back to them and confirm: "Yo
 
 Then include this exact tag at the end of your message:
 [ENQUIRY_COMPLETE]
-
-STOCK RULES:
-- If stock is 5 or fewer units, say "limited stock — order soon"
-- If stock is 0, say "currently out of stock" and offer to notify them when available
 
 LIVE INVENTORY:
 ${inventoryText}`;
@@ -105,7 +105,7 @@ ${transcript}
   await transporter.sendMail(mailOptions);
 }
 
-// ── Main chat endpoint ────────────────────────────────────────
+// ── Main chat endpoint (OpenAI Version) ───────────────────────
 app.post("/api/enquiry", async (req, res) => {
   const { message, sessionId } = req.body;
   if (!message || !sessionId) {
@@ -122,28 +122,17 @@ app.post("/api/enquiry", async (req, res) => {
   try {
     const systemPrompt = await buildSystemPrompt();
     
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: sessions[sessionId],
-      }),
+    // Send to OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o", // Uses your £5 credit
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...sessions[sessionId]
+      ],
+      max_tokens: 1000,
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("Claude API error:", data);
-      return res.status(500).json({ error: "AI service error" });
-    }
-
-    let reply = data.content?.[0]?.text || "Sorry, please try again.";
+    let reply = completion.choices[0]?.message?.content || "Sorry, please try again.";
     const enquiryComplete = reply.includes("[ENQUIRY_COMPLETE]");
     reply = reply.replace("[ENQUIRY_COMPLETE]", "").trim();
 
@@ -163,7 +152,7 @@ app.post("/api/enquiry", async (req, res) => {
   }
 });
 
-// ── Get conversation transcript (for staff dashboard) ────────
+// ── Get conversation transcript ───────────────────────────────
 app.get("/api/enquiry/:sessionId", (req, res) => {
   const history = sessions[req.params.sessionId];
   if (!history) return res.status(404).json({ error: "Session not found" });
@@ -183,5 +172,5 @@ app.get("/api/sessions", (req, res) => {
 // ── Start server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ AI Parts Agent running on port ${PORT}`);
+  console.log(`✅ AI Parts Agent (OpenAI) running on port ${PORT}`);
 });
