@@ -254,37 +254,45 @@
     return div;
   }
 
-  async function bapSend() {
-    const input = document.getElementById("bap-input");
-    const btn = document.getElementById("bap-send-btn");
-    const message = input.value.trim();
-    if (!message || isLoading) return;
+     async function bapSend() {
+        const input = document.getElementById("bap-input");
+        const btn = document.getElementById("bap-send-btn");
+        const message = input.value.trim();
+        if (!message || isLoading) return;
 
-    isLoading = true; btn.disabled = true; input.value = "";
-    addMessage("user", message);
+        isLoading = true;
+        btn.disabled = true;
+        input.value = "";
 
-    try {
-      const response = await fetch(SERVER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, sessionId }),
-      });
-      const data = await response.json();
-      if (data.error) {
-        addMessage("ai", "Sorry, connection error.");
-      } else {
-        addMessage("ai", data.reply);
-      }
-    } catch (err) {
-      addMessage("ai", "Connection issue. Please try again.");
+        addMessage("user", message);
+        showTyping();
+
+        try {
+            // We point to the Python app directly, no Node proxy needed!
+            const response = await fetch("/api/proxy-chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message }), // <-- No sessionId needed
+            });
+
+            const data = await response.json();
+            removeTyping();
+
+            if (data.error) {
+                addMessage("ai", "Sorry, I couldn't process that. Please call us directly!");
+            } else {
+                addMessage("ai", data.reply);
+            }
+
+        } catch (err) {
+            removeTyping();
+            addMessage("ai", "Connection issue. Please refresh and try again.");
+        }
+
+        isLoading = false;
+        btn.disabled = false;
+        input.focus();
     }
-    isLoading = false; btn.disabled = false; input.focus();
-  }
-
-  function bapQuick(text) {
-    document.getElementById("bap-input").value = text;
-    bapSend();
-  }
 
   window.bapToggle = bapToggle;
   window.bapSend = bapSend;
