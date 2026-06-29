@@ -719,16 +719,22 @@ import requests  # Ensure this is at the very top of the file
 # ============================================
 @app.route('/api/proxy-chat', methods=['POST'])
 def proxy_chat():
-    # The URL of your AI Node server
     node_url = "https://autoparts-pro-saas-1.onrender.com/api/enquiry"
     try:
         payload = request.get_json()
-        print(f"🔔 [PYTHON] Received chat: {payload}")  # Debug log
+        print(f"🔔 [PYTHON] Received chat: {payload}")
         
-        # Forward to Node with the 'Expect' header fix
+        # Send the request to Node
         response = requests.post(node_url, json=payload, headers={'Expect': ''}, timeout=15)
         
         print(f"🔔 [PYTHON] Node responded with status: {response.status_code}")
+        
+        # CRUCIAL: If Node returns a 417, print its 117-byte error message so we can see it!
+        if response.status_code == 417:
+            error_body = response.text
+            print(f"❌ [PYTHON] Node returned 417! It said: {error_body}")
+            return {"error": f"AI Server Error: {error_body}"}, 417
+            
         return response.text, response.status_code, {'Content-Type': 'application/json'}
         
     except requests.exceptions.ConnectionError as e:
