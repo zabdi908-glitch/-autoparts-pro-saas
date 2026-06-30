@@ -758,6 +758,7 @@ This enquiry was captured by the Cherrywood AI Chat Assistant.
         print(f"❌ Failed to send email: {e}", flush=True)
 
 
+
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
 # ============================================
@@ -848,6 +849,12 @@ Your job is to help customers find parts, and when they are ready, collect their
 CRITICAL RULE: Keep your answers short and specific. Always answer based on what you just said previously.
 If the customer says "1", "2", "3", etc., it means they are selecting an option from the list YOU just gave them. Respond to that selection naturally!
 If the inventory shown doesn't seem to match what the customer is asking for, let them know you'll have a staff member check current stock rather than guessing.
+If a part exists for a different model than what the customer asked for, mention it but be clear it isn't confirmed for their specific model.
+
+ENQUIRY SUBMISSION - FOLLOW THIS EXACTLY:
+Once the customer has provided their name, phone number, and/or email address along with the part or vehicle they are asking about, you MUST respond with ONLY this exact format and nothing else:
+[ENQUIRY_COMPLETE]{{"name": "their name", "phone": "their phone", "email": "their email", "vehicle": "vehicle mentioned", "part": "part mentioned"}}
+Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted your details" or anything similar - the system will generate that confirmation automatically once it receives your JSON. Your entire response in this case must be the [ENQUIRY_COMPLETE] tag immediately followed by valid JSON, with no other text before or after it.
 """
 
         # 4. Call OpenAI with the HISTORY
