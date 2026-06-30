@@ -759,6 +759,9 @@ This enquiry was captured by the Cherrywood AI Chat Assistant.
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
 # ============================================
+# ============================================
+# AI CHAT PROXY ROUTE (Connects Python to Node) — DEBUG VERSION
+# ============================================
 @app.route('/api/proxy-chat', methods=['POST'])
 @csrf.exempt
 def proxy_chat():
@@ -767,7 +770,7 @@ def proxy_chat():
         if not data:
             return jsonify({'error': 'No JSON body received'}), 400
         user_message = data.get('message', '').strip()
-        session_id = data.get('sessionId', 'unknown')  # Get the ID from the frontend
+        session_id = data.get('sessionId', 'unknown')
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
         api_key = os.getenv('OPENAI_API_KEY')
@@ -777,35 +780,30 @@ def proxy_chat():
         # 1. Manage the conversation history
         if session_id not in sessions:
             sessions[session_id] = []
-
-        # Add the user's new message to memory
         sessions[session_id].append({"role": "user", "content": user_message})
-
-        # Keep only the last 10 messages (5 exchanges) to control payload size and speed.
-        # This is the biggest lever for cutting response time as conversations grow.
         sessions[session_id] = sessions[session_id][-10:]
 
-        # 2. Fetch live inventory — now filtered by what the customer is actually asking about,
-        # instead of dumping up to 100 random parts into every single request.
+        # 2. Fetch live inventory — filtered by keywords from the user's message
         try:
             db = get_db()
 
-            # Pull keywords out of the user's message to search against the inventory.
-            # Ignore very short/common words so we don't accidentally match everything.
             stopwords = {
                 'the', 'and', 'for', 'with', 'have', 'has', 'you', 'your', 'are',
                 'can', 'need', 'looking', 'price', 'cost', 'much', 'how', 'what',
                 'this', 'that', 'got', 'any', 'please', 'hi', 'hello', 'thanks'
             }
             words = re.findall(r'[a-zA-Z0-9]+', user_message.lower())
-            keywords = [w for w in words if len(w) > 2 and w not in stopwords]
+            # DEBUG: lowered the length cutoff to 1 so short codes like "a3" survive
+            keywords = [w for w in words if len(w) > 1 and w not in stopwords]
+
+            print(f"🔍 [AI DEBUG] User message: {user_message!r}", flush=True)
+            print(f"🔍 [AI DEBUG] Extracted keywords: {keywords}", flush=True)
 
             parts_rows = []
             if keywords:
-                # Build a WHERE clause that matches ANY keyword against the key searchable fields
                 like_clauses = []
                 params = []
-                for kw in keywords[:6]:  # cap to 6 keywords to keep the query fast
+                for kw in keywords[:6]:
                     term = f'%{kw}%'
                     like_clauses.append(
                         "(part_name LIKE ? OR make LIKE ? OR model LIKE ? OR category LIKE ? OR oem_number LIKE ? OR engine_code LIKE ?)"
@@ -818,15 +816,15 @@ def proxy_chat():
                           WHERE stock_status = 'Available' AND ({where_sql})
                           LIMIT 25"""
                 parts_rows = db.execute(sql, params).fetchall()
+                print(f"🔍 [AI DEBUG] Matched {len(parts_rows)} parts via keyword search", flush=True)
 
-            # If no keywords matched anything useful, fall back to a small general sample
-            # so the assistant still has *something* to reference, without sending the whole catalog.
             if not parts_rows:
                 parts_rows = db.execute(
                     "SELECT part_name, make, model, category, price, stock_status, oem_number "
                     "FROM parts WHERE stock_status = 'Available' "
                     "ORDER BY created_at DESC LIMIT 20"
                 ).fetchall()
+                print(f"🔍 [AI DEBUG] No keyword match — fell back to {len(parts_rows)} recent parts", flush=True)
 
             db.close()
 
@@ -834,8 +832,11 @@ def proxy_chat():
                 f"- {p['part_name']} | {p['make']} {p['model']} | £{p['price']:.2f} | OEM: {p['oem_number'] or 'N/A'} | {p['category']}"
                 for p in parts_rows
             ])
+            print(f"🔍 [AI DEBUG] Final inventory_context sent to AI:\n{parts_list}", flush=True)
+
             inventory_context = f"Relevant available parts:\n{parts_list}" if parts_list else "No matching parts currently in stock."
         except Exception as e:
+            print(f"❌ [AI DEBUG] Inventory fetch crashed: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
         # 3. System prompt
@@ -853,7 +854,7 @@ If the inventory shown doesn't seem to match what the customer is asking for, le
             "model": "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *sessions[session_id]  # <-- Trimmed conversation history
+                *sessions[session_id]
             ],
             "max_tokens": 400
         }
@@ -863,11 +864,9 @@ If the inventory shown doesn't seem to match what the customer is asking for, le
             return jsonify({'error': f"OpenAI API Error: {response.text}"}), response.status_code
         reply = response.json()['choices'][0]['message']['content']
 
-        # 5. Save the AI's reply to memory too!
         sessions[session_id].append({"role": "assistant", "content": reply})
-        sessions[session_id] = sessions[session_id][-10:]  # keep it trimmed after appending the reply too
+        sessions[session_id] = sessions[session_id][-10:]
 
-        # 6. Check for the Enquiry Completion flag
         if "[ENQUIRY_COMPLETE]" in reply:
             json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
             try:
