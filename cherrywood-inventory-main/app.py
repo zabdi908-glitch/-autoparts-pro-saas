@@ -757,11 +757,9 @@ This enquiry was captured by the Cherrywood AI Chat Assistant.
     except Exception as e:
         print(f"❌ Failed to send email: {e}", flush=True)
 
+
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
-# ============================================
-# ============================================
-# AI CHAT PROXY ROUTE (Connects Python to Node) — DEBUG VERSION
 # ============================================
 @app.route('/api/proxy-chat', methods=['POST'])
 @csrf.exempt
@@ -778,7 +776,7 @@ def proxy_chat():
         if not api_key:
             return jsonify({'error': 'API key not configured'}), 500
 
-        # 1. Manage the conversation history
+        # 1. Manage the conversation history (capped to keep payload size/speed under control)
         if session_id not in sessions:
             sessions[session_id] = []
         sessions[session_id].append({"role": "user", "content": user_message})
@@ -791,20 +789,27 @@ def proxy_chat():
             stopwords = {
                 'the', 'and', 'for', 'with', 'have', 'has', 'you', 'your', 'are',
                 'can', 'need', 'looking', 'price', 'cost', 'much', 'how', 'what',
-                'this', 'that', 'got', 'any', 'please', 'hi', 'hello', 'thanks'
+                'this', 'that', 'got', 'any', 'please', 'hi', 'hello', 'thanks',
+                'other', 'options', 'do', 'does', 'a', 'an', 'of', 'on', 'in'
             }
             words = re.findall(r'[a-zA-Z0-9]+', user_message.lower())
-            # DEBUG: lowered the length cutoff to 1 so short codes like "a3" survive
-            keywords = [w for w in words if len(w) > 1 and w not in stopwords]
 
-            print(f"🔍 [AI DEBUG] User message: {user_message!r}", flush=True)
-            print(f"🔍 [AI DEBUG] Extracted keywords: {keywords}", flush=True)
+            keywords = []
+            for w in words:
+                if len(w) <= 1 or w in stopwords:
+                    continue
+                # Singularize simple plurals (e.g. "engines" -> "engine", "brakes" -> "brake")
+                # so they still match singular category names stored in the database.
+                singular = w[:-1] if len(w) > 3 and w.endswith('s') and not w.endswith('ss') else w
+                keywords.append(singular)
+                if singular != w:
+                    keywords.append(w)  # keep the original too, in case it's stored plural somewhere
 
             parts_rows = []
             if keywords:
                 like_clauses = []
                 params = []
-                for kw in keywords[:6]:
+                for kw in keywords[:8]:
                     term = f'%{kw}%'
                     like_clauses.append(
                         "(part_name LIKE ? OR make LIKE ? OR model LIKE ? OR category LIKE ? OR oem_number LIKE ? OR engine_code LIKE ?)"
@@ -817,7 +822,6 @@ def proxy_chat():
                           WHERE stock_status = 'Available' AND ({where_sql})
                           LIMIT 25"""
                 parts_rows = db.execute(sql, params).fetchall()
-                print(f"🔍 [AI DEBUG] Matched {len(parts_rows)} parts via keyword search", flush=True)
 
             if not parts_rows:
                 parts_rows = db.execute(
@@ -825,7 +829,6 @@ def proxy_chat():
                     "FROM parts WHERE stock_status = 'Available' "
                     "ORDER BY created_at DESC LIMIT 20"
                 ).fetchall()
-                print(f"🔍 [AI DEBUG] No keyword match — fell back to {len(parts_rows)} recent parts", flush=True)
 
             db.close()
 
@@ -833,11 +836,9 @@ def proxy_chat():
                 f"- {p['part_name']} | {p['make']} {p['model']} | £{p['price']:.2f} | OEM: {p['oem_number'] or 'N/A'} | {p['category']}"
                 for p in parts_rows
             ])
-            print(f"🔍 [AI DEBUG] Final inventory_context sent to AI:\n{parts_list}", flush=True)
-
             inventory_context = f"Relevant available parts:\n{parts_list}" if parts_list else "No matching parts currently in stock."
         except Exception as e:
-            print(f"❌ [AI DEBUG] Inventory fetch crashed: {e}", flush=True)
+            print(f"❌ [AI] Inventory fetch error: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
         # 3. System prompt
@@ -847,6 +848,7 @@ Your job is to help customers find parts, and when they are ready, collect their
 CRITICAL RULE: Keep your answers short and specific. Always answer based on what you just said previously.
 If the customer says "1", "2", "3", etc., it means they are selecting an option from the list YOU just gave them. Respond to that selection naturally!
 If the inventory shown doesn't seem to match what the customer is asking for, let them know you'll have a staff member check current stock rather than guessing.
+If a part exists for a different model than what the customer asked for, mention it but be clear it isn't confirmed for their specific model.
 """
 
         # 4. Call OpenAI with the HISTORY
