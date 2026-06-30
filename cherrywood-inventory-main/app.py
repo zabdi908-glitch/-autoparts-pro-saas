@@ -376,6 +376,23 @@ def restore_confirm():
         flash(f'❌ Restore failed: {e}', 'error')
         return redirect(url_for('index'))
 
+@app.route('/admin/enquiries')
+@login_required
+def enquiries_list():
+    status = request.args.get('status', 'All')
+    enquiries = enquiries_store.get_all_enquiries(status_filter=status)
+    counts = enquiries_store.get_counts()
+    return render_template('enquiries_list.html', enquiries=enquiries, counts=counts, current_status=status)
+
+
+@app.route('/admin/enquiries/<int:id>/status', methods=['POST'])
+@login_required
+def enquiry_update_status(id):
+    new_status = request.form.get('status', 'New')
+    enquiries_store.update_status(id, new_status)
+    flash(f'✅ Enquiry #{id} marked as {new_status}', 'success')
+    return redirect(url_for('enquiries_list'))
+
 # ============================================
 # INFO PAGES
 # ============================================
