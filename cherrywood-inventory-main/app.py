@@ -995,10 +995,10 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
                 print(f"⚠️ [AI] Failed to parse enquiry JSON: {json_str}", flush=True)
                 pass
 
-            return jsonify({'reply': reply})
-                        except Exception as e:
-            print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
-            return jsonify({'error': str(e)}), 500
+               return jsonify({'reply': reply})
+           except Exception as e:
+               print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
+               return jsonify({'error': str(e)}), 500
 # ============================================
 # RUN THE APP
 # ============================================
