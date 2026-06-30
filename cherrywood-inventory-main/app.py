@@ -12,6 +12,9 @@ from openai import OpenAI
 import httpx
 from flask import jsonify
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
@@ -712,6 +715,46 @@ def parts_bulk_update():
             return redirect(url_for('parts_bulk_update'))
     return render_template('parts_bulk_update.html')
 
+def send_enquiry_email(data):
+    try:
+        sender = os.getenv('EMAIL_USER')
+        password = os.getenv('EMAIL_PASS')
+        recipient = os.getenv('STAFF_EMAIL')
+        
+        if not sender or not password or not recipient:
+            print("❌ Missing email environment variables", flush=True)
+            return
+
+        subject = f"🔔 New Parts Enquiry from {data.get('name', 'Customer')}"
+        body = f"""
+New Enquiry Received!
+
+👤 Name: {data.get('name')}
+📞 Phone: {data.get('phone')}
+📧 Email: {data.get('email')}
+🚗 Vehicle: {data.get('vehicle')}
+🔧 Part Needed: {data.get('part')}
+
+This enquiry was captured by the Cherrywood AI Chat Assistant.
+        """
+
+        msg = MIMEMultipart()
+        msg['From'] = sender
+        msg['To'] = recipient
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Connect to Gmail's SMTP server and send
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender, password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"📧 Enquiry email sent to {recipient}", flush=True)
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}", flush=True)
+
 # ============================================
 # AI CHAT PROXY ROUTE (Connects Python to Node)
 # ============================================
@@ -719,7 +762,6 @@ def parts_bulk_update():
 @csrf.exempt
 def proxy_chat():
     try:
-        print("🔔 [AI] Request received", flush=True)
         data = request.get_json(force=True)
         if not data:
             return jsonify({'error': 'No JSON body received'}), 400
@@ -728,14 +770,11 @@ def proxy_chat():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
-        print(f"🔔 [AI] Message: {user_message}", flush=True)
-
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
-            print("❌ [AI] Missing OPENAI_API_KEY env var", flush=True)
             return jsonify({'error': 'API key not configured'}), 500
 
-        print("🔔 [AI] Fetching inventory...", flush=True)
+        # 1. Fetch live inventory (Same as before)
         try:
             db = get_db()
             parts_rows = db.execute(
@@ -748,25 +787,33 @@ def proxy_chat():
             ])
             inventory_context = f"Current available parts (up to 100 shown):\n{parts_list}" if parts_list else "No parts currently in stock."
         except Exception as e:
-            print(f"❌ [AI] DB error: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
-        system_prompt = f"""You are a helpful auto parts assistant for Cherrywood Auto Parts, a VAG vehicle breaker based in Birmingham, UK.
+        # 2. New System Prompt that forces data collection
+        system_prompt = f"""You are a friendly auto parts assistant for Cherrywood Auto Parts.
+Your job is to help customers find parts, and when they are ready, collect their details for a staff member to follow up.
+
+You MUST collect these 5 specific details:
+1. Full Name
+2. Best Phone Number
+3. Email Address
+4. Vehicle Make, Model, and Year
+5. The specific part they need
+
+Ask for them one at a time in a friendly, natural conversation.
 
 {inventory_context}
 
-Guidelines:
-- If a part is in stock, mention the price and suggest they WhatsApp us on 07440 369576.
-- If a part isn't listed, say we may still have it in the yard.
-- Encourage WhatsApp contact: https://wa.me/447440369576"""
+CRITICAL RULE:
+Once you have ALL 5 details, do NOT write anything else.
+Instead, start your response with exactly:
+[ENQUIRY_COMPLETE]{{"name": "Full Name", "phone": "Phone Number", "email": "Email Address", "vehicle": "Vehicle Details", "part": "Part Needed"}}
 
-        print("🔔 [AI] Calling OpenAI via Requests...", flush=True)
+If the customer asks about availability, provide the price and tell them you will collect their details to arrange it.
+"""
 
-        # FIX: Use raw Requests instead of the OpenAI SDK to avoid proxy errors
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        # 3. Call OpenAI
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
@@ -779,11 +826,24 @@ Guidelines:
         response = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
         
         if response.status_code != 200:
-            print(f"❌ [AI] OpenAI API Error: {response.text}", flush=True)
             return jsonify({'error': f"OpenAI API Error: {response.text}"}), response.status_code
 
         reply = response.json()['choices'][0]['message']['content']
-        print("🔔 [AI] Success! Reply sent.", flush=True)
+
+        # 4. Parse for the Completion Flag and JSON
+        if "[ENQUIRY_COMPLETE]" in reply:
+            # Extract the JSON part
+            json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
+            try:
+                customer_data = json.loads(json_str)
+                # Send the email to the staff!
+                send_enquiry_email(customer_data)
+                # Return a friendly confirmation to the customer
+                return jsonify({'reply': "✅ Your enquiry has been sent to our team! We will call or email you back within 2 hours."})
+            except json.JSONDecodeError:
+                # If AI hallucinated the flag, just fall back to the normal message
+                pass
+
         return jsonify({'reply': reply})
 
     except Exception as e:
