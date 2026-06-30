@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from enquiries_store import enquiries_store
 import sqlite3
 import os
 import json
@@ -876,10 +877,20 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
         sessions[session_id].append({"role": "assistant", "content": reply})
         sessions[session_id] = sessions[session_id][-10:]
 
+        # 5. Check for the Enquiry Completion flag — save to database AND send email
         if "[ENQUIRY_COMPLETE]" in reply:
             json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
             try:
                 customer_data = json.loads(json_str)
+
+                # Save to the database first, so the enquiry is never lost
+                # even if the email step below fails for any reason.
+                enquiry_id = enquiries_store.add_enquiry(customer_data)
+                if enquiry_id:
+                    print(f"💾 Enquiry #{enquiry_id} saved to database", flush=True)
+                else:
+                    print("⚠️ Enquiry DB save failed — email will still be attempted", flush=True)
+
                 send_enquiry_email(customer_data)
                 return jsonify({'reply': "✅ Your enquiry has been sent! We will call or email you back within 2 hours."})
             except json.JSONDecodeError:
