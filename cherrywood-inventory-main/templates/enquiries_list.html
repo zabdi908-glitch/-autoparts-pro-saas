@@ -73,7 +73,7 @@
                         </td>
                         <td class="px-4 py-3">
                             <form method="POST" action="{{ url_for('enquiry_update_status', id=e.id) }}" class="flex gap-1">
-                                {{ csrf_token() if csrf_token is defined else '' }}
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <select name="status" onchange="this.form.submit()"
                                     class="bg-[#0f172a] border border-slate-700 rounded px-2 py-1 text-xs text-white">
                                     <option value="New" {% if e.status == 'New' %}selected{% endif %}>New</option>
