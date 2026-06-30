@@ -739,14 +739,15 @@ def send_enquiry_email(data):
     try:
         sender = os.getenv('EMAIL_USER')
         password = os.getenv('EMAIL_PASS')
-        recipient = os.getenv('STAFF_EMAIL')
+        staff_recipient = os.getenv('STAFF_EMAIL')
         
-        if not sender or not password or not recipient:
+        if not sender or not password or not staff_recipient:
             print("❌ Missing email environment variables", flush=True)
             return
 
-        subject = f"🔔 New Parts Enquiry from {data.get('name', 'Customer')}"
-        body = f"""
+        # --- 1. EMAIL TO THE STAFF (The one you already had) ---
+        staff_subject = f"🔔 New Parts Enquiry from {data.get('name', 'Customer')}"
+        staff_body = f"""
 New Enquiry Received!
 
 👤 Name: {data.get('name')}
@@ -757,24 +758,59 @@ New Enquiry Received!
 
 This enquiry was captured by the Cherrywood AI Chat Assistant.
         """
+        staff_msg = MIMEMultipart()
+        staff_msg['From'] = sender
+        staff_msg['To'] = staff_recipient
+        staff_msg['Subject'] = staff_subject
+        staff_msg.attach(MIMEText(staff_body, 'plain'))
 
-        msg = MIMEMultipart()
-        msg['From'] = sender
-        msg['To'] = recipient
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+        # --- 2. EMAIL TO THE CUSTOMER (The new auto-reply) ---
+        customer_email = data.get('email')
+        if customer_email: # Only send if we actually have the email address
+            customer_name = data.get('name')
+            customer_vehicle = data.get('vehicle')
+            customer_part = data.get('part')
 
-        # Connect to Gmail's SMTP server and send
+            customer_subject = f"Thank you for your enquiry, {customer_name}!"
+            customer_body = f"""
+Dear {customer_name},
+
+Thank you for reaching out to Cherrywood Auto Parts!
+
+We have received your enquiry regarding the following:
+🚗 Vehicle: {customer_vehicle}
+🔧 Part Needed: {customer_part}
+
+A member of our parts team will review this and will reach out to you at **{data.get('phone')}** within the next 2 business hours.
+
+If you have any immediate questions, feel free to reply directly to this email or call us at 07440 369576.
+
+Best regards,
+The Cherrywood Auto Parts Team
+            """
+            customer_msg = MIMEMultipart()
+            customer_msg['From'] = sender
+            customer_msg['To'] = customer_email
+            customer_msg['Subject'] = customer_subject
+            customer_msg.attach(MIMEText(customer_body, 'plain'))
+
+        # --- 3. SEND BOTH EMAILS ---
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender, password)
-        server.send_message(msg)
+        
+        server.send_message(staff_msg)   # Send to staff
+        if customer_email:
+            server.send_message(customer_msg) # Send to customer
+        
         server.quit()
         
-        print(f"📧 Enquiry email sent to {recipient}", flush=True)
+        print(f"📧 Staff email sent to {staff_recipient}", flush=True)
+        if customer_email:
+            print(f"📧 Customer auto-reply sent to {customer_email}", flush=True)
+            
     except Exception as e:
-        print(f"❌ Failed to send email: {e}", flush=True)
-
+        print(f"❌ Failed to send emails: {e}", flush=True)
 
 
 # ============================================
@@ -860,7 +896,7 @@ def proxy_chat():
             print(f"❌ [AI] Inventory fetch error: {e}", flush=True)
             inventory_context = "Inventory temporarily unavailable."
 
-        # 3. System prompt
+                # 3. System prompt
         system_prompt = f"""You are a friendly auto parts assistant for Cherrywood Auto Parts.
 Your job is to help customers find parts, and when they are ready, collect their details for a staff member to follow up.
 {inventory_context}
@@ -868,6 +904,10 @@ CRITICAL RULE: Keep your answers short and specific. Always answer based on what
 If the customer says "1", "2", "3", etc., it means they are selecting an option from the list YOU just gave them. Respond to that selection naturally!
 If the inventory shown doesn't seem to match what the customer is asking for, let them know you'll have a staff member check current stock rather than guessing.
 If a part exists for a different model than what the customer asked for, mention it but be clear it isn't confirmed for their specific model.
+
+IF THE CUSTOMER ASKS FOR AN EXTRA PART:
+If a customer submits an enquiry, and then asks about a DIFFERENT part or vehicle, treat this as a BRAND NEW separate enquiry.
+You must re-collect their contact details (Name, Phone, Email, Vehicle, Part) again for this new request before triggering the final completion JSON.
 
 ENQUIRY SUBMISSION - FOLLOW THIS EXACTLY:
 Once the customer has provided their name, phone number, and/or email address along with the part or vehicle they are asking about, you MUST respond with ONLY this exact format and nothing else:
