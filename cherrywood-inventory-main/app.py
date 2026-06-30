@@ -766,13 +766,10 @@ def proxy_chat():
         data = request.get_json(force=True)
         if not data:
             return jsonify({'error': 'No JSON body received'}), 400
-
         user_message = data.get('message', '').strip()
-        session_id = data.get('sessionId', 'unknown') # Get the ID from the frontend
-
+        session_id = data.get('sessionId', 'unknown')  # Get the ID from the frontend
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
-
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             return jsonify({'error': 'API key not configured'}), 500
@@ -780,34 +777,74 @@ def proxy_chat():
         # 1. Manage the conversation history
         if session_id not in sessions:
             sessions[session_id] = []
-        
+
         # Add the user's new message to memory
         sessions[session_id].append({"role": "user", "content": user_message})
 
-        # 2. Fetch live inventory
+        # Keep only the last 10 messages (5 exchanges) to control payload size and speed.
+        # This is the biggest lever for cutting response time as conversations grow.
+        sessions[session_id] = sessions[session_id][-10:]
+
+        # 2. Fetch live inventory — now filtered by what the customer is actually asking about,
+        # instead of dumping up to 100 random parts into every single request.
         try:
             db = get_db()
-            parts_rows = db.execute(
-                "SELECT part_name, make, model, category, price, stock_status, oem_number FROM parts WHERE stock_status = 'Available' LIMIT 100"
-            ).fetchall()
+
+            # Pull keywords out of the user's message to search against the inventory.
+            # Ignore very short/common words so we don't accidentally match everything.
+            stopwords = {
+                'the', 'and', 'for', 'with', 'have', 'has', 'you', 'your', 'are',
+                'can', 'need', 'looking', 'price', 'cost', 'much', 'how', 'what',
+                'this', 'that', 'got', 'any', 'please', 'hi', 'hello', 'thanks'
+            }
+            words = re.findall(r'[a-zA-Z0-9]+', user_message.lower())
+            keywords = [w for w in words if len(w) > 2 and w not in stopwords]
+
+            parts_rows = []
+            if keywords:
+                # Build a WHERE clause that matches ANY keyword against the key searchable fields
+                like_clauses = []
+                params = []
+                for kw in keywords[:6]:  # cap to 6 keywords to keep the query fast
+                    term = f'%{kw}%'
+                    like_clauses.append(
+                        "(part_name LIKE ? OR make LIKE ? OR model LIKE ? OR category LIKE ? OR oem_number LIKE ? OR engine_code LIKE ?)"
+                    )
+                    params.extend([term, term, term, term, term, term])
+
+                where_sql = " OR ".join(like_clauses)
+                sql = f"""SELECT part_name, make, model, category, price, stock_status, oem_number
+                          FROM parts
+                          WHERE stock_status = 'Available' AND ({where_sql})
+                          LIMIT 25"""
+                parts_rows = db.execute(sql, params).fetchall()
+
+            # If no keywords matched anything useful, fall back to a small general sample
+            # so the assistant still has *something* to reference, without sending the whole catalog.
+            if not parts_rows:
+                parts_rows = db.execute(
+                    "SELECT part_name, make, model, category, price, stock_status, oem_number "
+                    "FROM parts WHERE stock_status = 'Available' "
+                    "ORDER BY created_at DESC LIMIT 20"
+                ).fetchall()
+
             db.close()
+
             parts_list = "\n".join([
                 f"- {p['part_name']} | {p['make']} {p['model']} | £{p['price']:.2f} | OEM: {p['oem_number'] or 'N/A'} | {p['category']}"
                 for p in parts_rows
             ])
-            inventory_context = f"Current available parts (up to 100 shown):\n{parts_list}" if parts_list else "No parts currently in stock."
+            inventory_context = f"Relevant available parts:\n{parts_list}" if parts_list else "No matching parts currently in stock."
         except Exception as e:
             inventory_context = "Inventory temporarily unavailable."
 
         # 3. System prompt
         system_prompt = f"""You are a friendly auto parts assistant for Cherrywood Auto Parts.
 Your job is to help customers find parts, and when they are ready, collect their details for a staff member to follow up.
-
 {inventory_context}
-
 CRITICAL RULE: Keep your answers short and specific. Always answer based on what you just said previously.
-
 If the customer says "1", "2", "3", etc., it means they are selecting an option from the list YOU just gave them. Respond to that selection naturally!
+If the inventory shown doesn't seem to match what the customer is asking for, let them know you'll have a staff member check current stock rather than guessing.
 """
 
         # 4. Call OpenAI with the HISTORY
@@ -816,20 +853,19 @@ If the customer says "1", "2", "3", etc., it means they are selecting an option 
             "model": "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *sessions[session_id] # <-- THIS includes the entire conversation history!
+                *sessions[session_id]  # <-- Trimmed conversation history
             ],
             "max_tokens": 400
         }
-
         response = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
-        
+
         if response.status_code != 200:
             return jsonify({'error': f"OpenAI API Error: {response.text}"}), response.status_code
-
         reply = response.json()['choices'][0]['message']['content']
 
         # 5. Save the AI's reply to memory too!
         sessions[session_id].append({"role": "assistant", "content": reply})
+        sessions[session_id] = sessions[session_id][-10:]  # keep it trimmed after appending the reply too
 
         # 6. Check for the Enquiry Completion flag
         if "[ENQUIRY_COMPLETE]" in reply:
@@ -839,10 +875,10 @@ If the customer says "1", "2", "3", etc., it means they are selecting an option 
                 send_enquiry_email(customer_data)
                 return jsonify({'reply': "✅ Your enquiry has been sent! We will call or email you back within 2 hours."})
             except json.JSONDecodeError:
+                print(f"⚠️ [AI] Failed to parse enquiry JSON: {json_str}", flush=True)
                 pass
 
         return jsonify({'reply': reply})
-
     except Exception as e:
         print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
         return jsonify({'error': str(e)}), 500
