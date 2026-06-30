@@ -983,13 +983,18 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
                 if enquiry_id and customer_reply:
                     enquiries_store.update_status(enquiry_id, 'Contacted', notes=customer_reply)
  
+                                # 3. Generate and send an AI reply directly to the customer,
+                #    based only on real inventory data — never invented details.
+                customer_reply = handle_enquiry_auto_reply(customer_data, get_db)
+                    if enquiry_id and customer_reply:
+                    enquiries_store.update_status(enquiry_id, 'Contacted', notes=customer_reply)
+
                 return jsonify({'reply': "✅ Your enquiry has been sent! We will call or email you back within 2 hours."})
-                        except json.JSONDecodeError:
+            except json.JSONDecodeError:
                 print(f"⚠️ [AI] Failed to parse enquiry JSON: {json_str}", flush=True)
                 pass
-        
-            # <--- Add the missing lines below here:
-            return jsonify({'reply': reply})
+
+                return jsonify({'reply': reply})
         except Exception as e:
             print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
             return jsonify({'error': str(e)}), 500
