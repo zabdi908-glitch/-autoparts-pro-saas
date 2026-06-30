@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from enquiries_store import enquiries_store
+from email_reply_agent import handle_enquiry_auto_reply
 import sqlite3
 import os
 import json
@@ -935,29 +936,31 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
         sessions[session_id] = sessions[session_id][-10:]
 
         # 5. Check for the Enquiry Completion flag — save to database AND send email
-        if "[ENQUIRY_COMPLETE]" in reply:
+         if "[ENQUIRY_COMPLETE]" in reply:
             json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
             try:
                 customer_data = json.loads(json_str)
-
-                # Save to the database first, so the enquiry is never lost
-                # even if the email step below fails for any reason.
+ 
+                # 1. Save to the database first, so the enquiry is never lost
                 enquiry_id = enquiries_store.add_enquiry(customer_data)
                 if enquiry_id:
                     print(f"💾 Enquiry #{enquiry_id} saved to database", flush=True)
                 else:
-                    print("⚠️ Enquiry DB save failed — email will still be attempted", flush=True)
-
+                    print("⚠️ Enquiry DB save failed", flush=True)
+ 
+                # 2. Notify staff via the existing internal email
                 send_enquiry_email(customer_data)
+ 
+                # 3. Generate and send an AI reply directly to the customer,
+                #    based only on real inventory data — never invented details.
+                customer_reply = handle_enquiry_auto_reply(customer_data, get_db)
+                if enquiry_id and customer_reply:
+                    enquiries_store.update_status(enquiry_id, 'Contacted', notes=customer_reply)
+ 
                 return jsonify({'reply': "✅ Your enquiry has been sent! We will call or email you back within 2 hours."})
             except json.JSONDecodeError:
                 print(f"⚠️ [AI] Failed to parse enquiry JSON: {json_str}", flush=True)
                 pass
-
-        return jsonify({'reply': reply})
-    except Exception as e:
-        print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
-        return jsonify({'error': str(e)}), 500
 # ============================================
 # RUN THE APP
 # ============================================
