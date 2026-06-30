@@ -15,6 +15,7 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+sessions = {}
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
@@ -767,6 +768,8 @@ def proxy_chat():
             return jsonify({'error': 'No JSON body received'}), 400
 
         user_message = data.get('message', '').strip()
+        session_id = data.get('sessionId', 'unknown') # Get the ID from the frontend
+
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
@@ -774,7 +777,14 @@ def proxy_chat():
         if not api_key:
             return jsonify({'error': 'API key not configured'}), 500
 
-        # 1. Fetch live inventory (Same as before)
+        # 1. Manage the conversation history
+        if session_id not in sessions:
+            sessions[session_id] = []
+        
+        # Add the user's new message to memory
+        sessions[session_id].append({"role": "user", "content": user_message})
+
+        # 2. Fetch live inventory
         try:
             db = get_db()
             parts_rows = db.execute(
@@ -789,36 +799,24 @@ def proxy_chat():
         except Exception as e:
             inventory_context = "Inventory temporarily unavailable."
 
-        # 2. New System Prompt that forces data collection
+        # 3. System prompt
         system_prompt = f"""You are a friendly auto parts assistant for Cherrywood Auto Parts.
 Your job is to help customers find parts, and when they are ready, collect their details for a staff member to follow up.
 
-You MUST collect these 5 specific details:
-1. Full Name
-2. Best Phone Number
-3. Email Address
-4. Vehicle Make, Model, and Year
-5. The specific part they need
-
-Ask for them one at a time in a friendly, natural conversation.
-
 {inventory_context}
 
-CRITICAL RULE:
-Once you have ALL 5 details, do NOT write anything else.
-Instead, start your response with exactly:
-[ENQUIRY_COMPLETE]{{"name": "Full Name", "phone": "Phone Number", "email": "Email Address", "vehicle": "Vehicle Details", "part": "Part Needed"}}
+CRITICAL RULE: Keep your answers short and specific. Always answer based on what you just said previously.
 
-If the customer asks about availability, provide the price and tell them you will collect their details to arrange it.
+If the customer says "1", "2", "3", etc., it means they are selecting an option from the list YOU just gave them. Respond to that selection naturally!
 """
 
-        # 3. Call OpenAI
+        # 4. Call OpenAI with the HISTORY
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
+                *sessions[session_id] # <-- THIS includes the entire conversation history!
             ],
             "max_tokens": 400
         }
@@ -830,18 +828,17 @@ If the customer asks about availability, provide the price and tell them you wil
 
         reply = response.json()['choices'][0]['message']['content']
 
-        # 4. Parse for the Completion Flag and JSON
+        # 5. Save the AI's reply to memory too!
+        sessions[session_id].append({"role": "assistant", "content": reply})
+
+        # 6. Check for the Enquiry Completion flag
         if "[ENQUIRY_COMPLETE]" in reply:
-            # Extract the JSON part
             json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
             try:
                 customer_data = json.loads(json_str)
-                # Send the email to the staff!
                 send_enquiry_email(customer_data)
-                # Return a friendly confirmation to the customer
-                return jsonify({'reply': "✅ Your enquiry has been sent to our team! We will call or email you back within 2 hours."})
+                return jsonify({'reply': "✅ Your enquiry has been sent! We will call or email you back within 2 hours."})
             except json.JSONDecodeError:
-                # If AI hallucinated the flag, just fall back to the normal message
                 pass
 
         return jsonify({'reply': reply})
