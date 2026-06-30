@@ -16,6 +16,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 sessions = {}
+import re
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
