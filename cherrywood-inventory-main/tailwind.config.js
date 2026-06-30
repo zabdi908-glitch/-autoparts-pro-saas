@@ -1,7 +1,1 @@
-module.exports = {
-  content: ["./templates/**/*.html", "./static/**/*.js"],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
+module.exports = { content: ["./templates/**/*.html"], theme: { extend: {} }, plugins: [], }
