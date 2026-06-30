@@ -1,8 +1,5 @@
 module.exports = {
-  content: [
-    "./cherrywood-inventory-main/templates/**/*.html",
-    "./cherrywood-inventory-main/static/**/*.js"
-  ],
+  content: ["./templates/**/*.html", "./static/**/*.js"],
   theme: {
     extend: {},
   },
