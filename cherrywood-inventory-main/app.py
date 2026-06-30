@@ -996,7 +996,7 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
                 pass
 
             return jsonify({'reply': reply})
-        except Exception as e:  # <--- INDENTED 4 SPACES (same as the first 'try:')
+                        except Exception as e:
             print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
             return jsonify({'error': str(e)}), 500
 # ============================================
