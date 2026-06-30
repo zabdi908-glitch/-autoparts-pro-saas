@@ -962,7 +962,7 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
         sessions[session_id] = sessions[session_id][-10:]
 
         # 5. Check for the Enquiry Completion flag — save to database AND send email
-         if "[ENQUIRY_COMPLETE]" in reply:
+        if "[ENQUIRY_COMPLETE]" in reply:
             json_str = reply.replace("[ENQUIRY_COMPLETE]", "").strip()
             try:
                 customer_data = json.loads(json_str)
