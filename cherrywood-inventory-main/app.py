@@ -986,6 +986,7 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
                                 # 3. Generate and send an AI reply directly to the customer,
                 #    based only on real inventory data — never invented details.
                 customer_reply = handle_enquiry_auto_reply(customer_data, get_db)
+                                # (inner code indented at 8 or 12 spaces)
                 if enquiry_id and customer_reply:
                     enquiries_store.update_status(enquiry_id, 'Contacted', notes=customer_reply)
 
@@ -994,8 +995,8 @@ Do NOT write any friendly confirmation message yourself. Do NOT say "I've noted 
                 print(f"⚠️ [AI] Failed to parse enquiry JSON: {json_str}", flush=True)
                 pass
 
-                return jsonify({'reply': reply})
-        except Exception as e:
+            return jsonify({'reply': reply})
+        except Exception as e:  # <--- INDENTED 4 SPACES (same as the first 'try:')
             print(f"❌ [AI] FATAL ERROR: {str(e)}", flush=True)
             return jsonify({'error': str(e)}), 500
 # ============================================
